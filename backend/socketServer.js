@@ -4,32 +4,13 @@ import jwt from "jsonwebtoken";
 import User from "./models/User.js";
 import Channel from "./models/Channel.js";
 import Message from "./models/Message.js";
-
-/**
- * Parse allowed origins from env:
- * CLIENT_URLS="http://localhost:5173,https://myapp.vercel.app,https://mydomain.com"
- */
-function getAllowedOrigins() {
-  const raw = process.env.CLIENT_URLS || "http://localhost:5173";
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+import { isOriginAllowed } from "./utils/corsOrigins.js";
 
 const initializeSocket = (httpServer) => {
-  const allowedOrigins = getAllowedOrigins();
-
   const io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        // Allow non-browser clients or same-origin (origin can be undefined)
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-
+        if (isOriginAllowed(origin)) return callback(null, true);
         return callback(
           new Error(`CORS blocked for origin: ${origin}`),
           false

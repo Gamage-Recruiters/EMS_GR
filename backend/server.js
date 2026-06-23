@@ -1,12 +1,14 @@
 import "dotenv/config"; // loads .env
 import express from "express";
 import cors from "cors";
+import fs from "fs";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 import initializeSocket from "./socketServer.js";
+import { isOriginAllowed } from "./utils/corsOrigins.js";
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
@@ -40,27 +42,10 @@ const httpServer = createServer(app);
 // Initialize Socket.IO
 const io = initializeSocket(httpServer);
 
-// CORS (Local + Vercel)
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:5175",
-  "http://localhost:5176",
-  "http://localhost:5177",
-  "https://your-frontend.vercel.app",
-];
-
+// CORS — set CLIENT_URLS on Render (comma-separated Vercel URLs)
 const corsOptions = {
   origin: (origin, cb) => {
-    // Allow requests with no origin (Postman, curl, server-to-server)
-    if (!origin) return cb(null, true);
-
-    // Allow exact known origins
-    if (allowedOrigins.includes(origin)) return cb(null, true);
-
-    // Allow ALL Vercel preview deployments (optional but useful)
-    if (origin.endsWith(".vercel.app")) return cb(null, true);
-
+    if (isOriginAllowed(origin)) return cb(null, true);
     return cb(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
@@ -85,8 +70,18 @@ app.get("/", (req, res) => {
   res.json({ message: "EMS Backend Running with Socket.IO" });
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// Ensure uploads dir exists (Render free tier has ephemeral disk)
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 // Serve uploaded images statically
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(uploadsDir));
 
 // API Routes
 app.use("/api/auth", authRoutes);
